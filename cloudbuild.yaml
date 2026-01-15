@@ -1,1 +1,41 @@
-﻿
+﻿steps:
+  # Build Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'build',
+      '-t', 'asia-southeast2-docker.pkg.dev/bni-prod-dma-bnimove-ai/cloud-run-source-deploy/text-doc-api-service-dev:$COMMIT_SHA',
+      '-t', 'asia-southeast2-docker.pkg.dev/bni-prod-dma-bnimove-ai/cloud-run-source-deploy/text-doc-api-service-dev:latest',
+      '.'
+    ]
+    id: 'build-api-service-dev'
+
+  # Push image with commit SHA
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'asia-southeast2-docker.pkg.dev/bni-prod-dma-bnimove-ai/cloud-run-source-deploy/text-doc-api-service-dev:$COMMIT_SHA']
+    id: 'push-api-service-dev'
+    waitFor: ['build-api-service-dev']
+
+  # Push latest tag
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'asia-southeast2-docker.pkg.dev/bni-prod-dma-bnimove-ai/cloud-run-source-deploy/text-doc-api-service-dev:latest']
+    id: 'push-api-service-dev-latest'
+    waitFor: ['build-api-service-dev']
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    args: [
+      'gcloud', 'run', 'deploy', 'text-doc-api-service-dev',
+      '--image=asia-southeast2-docker.pkg.dev/bni-prod-dma-bnimove-ai/cloud-run-source-deploy/text-doc-api-service-dev:$COMMIT_SHA',
+      '--region=asia-southeast2',
+      '--platform=managed'
+    ]
+    id: 'deploy-api-service-dev'
+    waitFor: ['push-api-service-dev']
+
+images:
+  - 'asia-southeast2-docker.pkg.dev/bni-prod-dma-bnimove-ai/cloud-run-source-deploy/text-doc-api-service-dev:$COMMIT_SHA'
+  - 'asia-southeast2-docker.pkg.dev/bni-prod-dma-bnimove-ai/cloud-run-source-deploy/text-doc-api-service-dev:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
