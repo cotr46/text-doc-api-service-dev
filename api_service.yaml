@@ -1,0 +1,121 @@
+# Cloud Run service configuration for API Service
+# To deploy: gcloud run services replace api-service.yaml
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: text-doc-api-service
+  annotations:
+    run.googleapis.com/ingress: all
+    run.googleapis.com/execution-environment: gen2
+spec:
+  template:
+    metadata:
+      annotations:
+        # CPU and memory allocation
+        run.googleapis.com/cpu-throttling: "false"
+        run.googleapis.com/memory: "2Gi"
+        run.googleapis.com/cpu: "1"
+        
+        # Scaling configuration
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "10"
+        
+    spec:
+      # Service account for GCP permissions
+      serviceAccountName: 369455734154-compute@developer.gserviceaccount.com
+      
+      # Timeout for requests (max 60 minutes for Cloud Run)
+      timeoutSeconds: 300
+      
+      containers:
+      - image: asia-southeast2-docker.pkg.dev/bni-prod-dma-bnimove-ai/cloud-run-source-deploy/character-api-service/character-api-service:6c12e6a1cf8af55fa36ff8ce8400dc2dbfff9174
+        
+        ports:
+        - containerPort: 8080
+          name: http1
+        
+        # Environment variables
+        env:
+        - name: GOOGLE_CLOUD_PROJECT
+          value: "bni-prod-dma-bnimove-ai"
+        - name: GCS_BUCKET_NAME
+          value: "sbp-wrapper-bucket"
+        - name: PUBSUB_TOPIC
+          value: "document-processing-request"
+        - name: FIRESTORE_DATABASE
+          value: "document-processing-firestore"
+        - name: PORT
+          value: "8080"
+        
+        # Text Analysis Model Configuration
+        - name: TEXT_ANALYSIS_ENABLED
+          value: "true"
+        - name: TEXT_MODEL_PEP_ANALYSIS
+          value: "politically-exposed-person-v2"
+        - name: TEXT_MODEL_NEGATIVE_NEWS
+          value: "negative-news"
+        - name: TEXT_MODEL_LAW_INVOLVEMENT
+          value: "law-involvement"
+        - name: TEXT_MODEL_CORPORATE_NEGATIVE_NEWS
+          value: "negative-news-corporate"
+        - name: TEXT_MODEL_CORPORATE_LAW_INVOLVEMENT
+          value: "law-involvement-corporate"
+        
+        # Authentication and Security Configuration
+        - name: REQUIRE_AUTH
+          value: "true"
+        - name: AUDIT_SENSITIVE_OPERATIONS
+          value: "true"
+        - name: RATE_LIMIT_REQUESTS
+          value: "1000"
+        - name: RATE_LIMIT_BURST
+          value: "100"
+        
+        # Text Analysis Model Endpoints (FIXED - REMOVED /api SUFFIX)
+        - name: OPENWEBUI_BASE_URL
+          value: "https://nexus-bnimove-369455734154.asia-southeast2.run.app"
+        - name: OPENWEBUI_API_KEY
+          value: "sk-c2ebcb8d36aa4361a28560915d8ab6f2"
+        - name: TEXT_MODEL_TIMEOUT_SECONDS
+          value: "30"
+        - name: TEXT_MODEL_RETRY_ATTEMPTS
+          value: "3"
+        
+        # Monitoring and Observability
+        - name: ENABLE_METRICS
+          value: "true"
+        - name: LOG_LEVEL
+          value: "INFO"
+        
+        # Resource limits
+        resources:
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+  
+  traffic:
+  - percent: 100
+    latestRevision: true
