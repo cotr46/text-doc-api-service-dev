@@ -674,49 +674,88 @@ async def health():
     
     return health_status
 
-async def check_text_model_availability(model_name: str, timeout: int = 5) -> Dict[str, Any]:
-    """Check if a text analysis model is available and responsive"""
+async def check_text_model_availability(model_name: str, timeout: int = 10) -> Dict[str, Any]:
+    """
+    Check if a text analysis model is available and responsive
+    Makes actual HTTP request to Nexus API to verify model availability
+    """
     start_time = time.time()
     
+    # Nexus API configuration
+    nexus_base_url = os.getenv("TEXT_MODEL_BASE_URL", "https://nexus-bnimove-369455734154.asia-southeast2.run.app")
+    nexus_api_key = os.getenv("TEXT_MODEL_API_KEY", "sk-c2ebcb8d36aa4361a28560915d8ab6f2")
+    
     try:
-        # For now, we'll simulate model health checks since we don't have actual model endpoints
-        # In a real implementation, this would make HTTP requests to model endpoints
-        
-        # Simulate network delay
-        await asyncio.sleep(0.1)
-        
-        # Mock health check logic - in production, this would be actual HTTP calls
-        # For demonstration, we'll consider all models healthy except for specific test cases
-        if "unavailable" in model_name.lower():
-            response_time = time.time() - start_time
-            
-            # Record availability check in metrics
-            text_analysis_metrics.record_model_availability_check(model_name, False, response_time)
-            
-            return {
-                "status": "unhealthy",
-                "response_time_ms": None,
-                "error": "Model endpoint not responding",
-                "last_checked": datetime.now(timezone.utc).isoformat()
-            }
-        
-        response_time = time.time() - start_time
-        mock_model_response_time = 0.15  # Mock response time in seconds
-        
-        # Record availability check in metrics
-        text_analysis_metrics.record_model_availability_check(model_name, True, response_time)
-        
-        return {
-            "status": "healthy",
-            "response_time_ms": int(mock_model_response_time * 1000),
-            "error": None,
-            "last_checked": datetime.now(timezone.utc).isoformat()
+        # Make actual HTTP request to Nexus API to check model availability
+        # Use a minimal test prompt to verify model responds
+        test_payload = {
+            "model": model_name,
+            "messages": [{"role": "user", "content": "test"}],
+            "max_tokens": 5,  # Minimal tokens to reduce cost
+            "stream": False
         }
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {nexus_api_key}",
+            "User-Agent": "TextAnalysisAPI/1.0"
+        }
+        
+        # Use aiohttp for async HTTP request
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{nexus_base_url}/api/chat/completions",
+                json=test_payload,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=timeout)
+            ) as response:
+                response_time = time.time() - start_time
+                
+                # Check response status
+                if response.status == 200:
+                    # Model is available and responding
+                    text_analysis_metrics.record_model_availability_check(model_name, True, response_time)
+                    
+                    return {
+                        "status": "healthy",
+                        "response_time_ms": int(response_time * 1000),
+                        "error": None,
+                        "last_checked": datetime.now(timezone.utc).isoformat()
+                    }
+                elif response.status == 404:
+                    # Model not found
+                    text_analysis_metrics.record_model_availability_check(model_name, False, response_time)
+                    
+                    return {
+                        "status": "unhealthy",
+                        "response_time_ms": int(response_time * 1000),
+                        "error": f"Model '{model_name}' not found (HTTP 404)",
+                        "last_checked": datetime.now(timezone.utc).isoformat()
+                    }
+                elif response.status == 503:
+                    # Service unavailable - model may be loading
+                    text_analysis_metrics.record_model_availability_check(model_name, False, response_time)
+                    
+                    return {
+                        "status": "unhealthy",
+                        "response_time_ms": int(response_time * 1000),
+                        "error": f"Model '{model_name}' is loading or unavailable (HTTP 503)",
+                        "last_checked": datetime.now(timezone.utc).isoformat()
+                    }
+                else:
+                    # Other error
+                    response_text = await response.text()
+                    text_analysis_metrics.record_model_availability_check(model_name, False, response_time)
+                    
+                    return {
+                        "status": "unhealthy",
+                        "response_time_ms": int(response_time * 1000),
+                        "error": f"Model check failed (HTTP {response.status}): {response_text[:100]}",
+                        "last_checked": datetime.now(timezone.utc).isoformat()
+                    }
         
     except asyncio.TimeoutError:
         response_time = time.time() - start_time
-        
-        # Record timeout in metrics
         text_analysis_metrics.record_model_availability_check(model_name, False, response_time)
         
         return {
@@ -725,10 +764,18 @@ async def check_text_model_availability(model_name: str, timeout: int = 5) -> Di
             "error": f"Model health check timed out after {timeout}s",
             "last_checked": datetime.now(timezone.utc).isoformat()
         }
+    except aiohttp.ClientError as e:
+        response_time = time.time() - start_time
+        text_analysis_metrics.record_model_availability_check(model_name, False, response_time)
+        
+        return {
+            "status": "error",
+            "response_time_ms": None,
+            "error": f"Connection error: {str(e)}",
+            "last_checked": datetime.now(timezone.utc).isoformat()
+        }
     except Exception as e:
         response_time = time.time() - start_time
-        
-        # Record error in metrics
         text_analysis_metrics.record_model_availability_check(model_name, False, response_time)
         
         return {
