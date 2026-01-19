@@ -688,11 +688,12 @@ async def check_text_model_availability(model_name: str, timeout: int = 10) -> D
     try:
         # Make actual HTTP request to Nexus API to check model availability
         # Use a minimal test prompt to verify model responds
+        # No temperature/max_tokens - let model use defaults (reasoning models don't support them)
         test_payload = {
             "model": model_name,
             "messages": [{"role": "user", "content": "test"}],
-            "max_tokens": 5,  # Minimal tokens to reduce cost
             "stream": False
+            # No temperature, max_tokens - use model defaults
         }
         
         headers = {
