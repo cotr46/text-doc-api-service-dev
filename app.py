@@ -674,10 +674,13 @@ async def health():
     
     return health_status
 
-async def check_text_model_availability(model_name: str, timeout: int = 10) -> Dict[str, Any]:
+async def check_text_model_availability(model_name: str, timeout: int = 180) -> Dict[str, Any]:
     """
     Check if a text analysis model is available and responsive
     Makes actual HTTP request to Nexus API to verify model availability
+    
+    Note: Reasoning models like PEP analysis can take 90-120 seconds to respond,
+    so we use a 180 second (3 minute) timeout as a safe threshold.
     """
     start_time = time.time()
     
@@ -703,6 +706,7 @@ async def check_text_model_availability(model_name: str, timeout: int = 10) -> D
         }
         
         # Use aiohttp for async HTTP request
+        # Timeout set to 180 seconds (3 minutes) for reasoning models
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{nexus_base_url}/api/chat/completions",
