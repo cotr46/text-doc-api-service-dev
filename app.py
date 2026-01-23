@@ -482,7 +482,7 @@ def create_text_analysis_job_record(job_id: str, analysis_type: str, entity_type
         
         job_data = {
             "job_id": job_id,
-            "job_type": "text_analysis",  # New field to distinguish from document jobs
+            "job_type": "text_analysis",
             "status": JobStatus.SUBMITTED.value,
             "analysis_type": analysis_type,
             "entity_type": entity_type,
@@ -492,13 +492,7 @@ def create_text_analysis_job_record(job_id: str, analysis_type: str, entity_type
             "created_at": datetime.now(timezone.utc),
             "updated_at": datetime.now(timezone.utc),
             "result": None,
-            "error": None,
-            # Document processing fields (set to None for text analysis)
-            "document_type": None,
-            "filename": None,
-            "gcs_path": None,
-            "is_multi_file": False,
-            "file_count": 0
+            "error": None
         }
         
         # Save to Firestore
