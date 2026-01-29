@@ -1,43 +1,43 @@
-﻿# Cloud Build configuration for Text Analysis API Service (Character Prescreening)
+﻿# Cloud Build - Text Analysis API Service (VPC Test)
 steps:
   # Build Docker image
   - name: 'gcr.io/cloud-builders/docker'
     args: [
       'build',
-      '-t', 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-analysis-api-service:$COMMIT_SHA',
-      '-t', 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-analysis-api-service:latest',
+      '-t', 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-analysis-api-service-vpc-test:$COMMIT_SHA',
+      '-t', 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-analysis-api-service-vpc-test:latest',
       '.'
     ]
     id: 'build'
 
-  # Push image with commit SHA
+  # Push image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-analysis-api-service:$COMMIT_SHA']
+    args: ['push', 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-analysis-api-service-vpc-test:$COMMIT_SHA']
     id: 'push'
     waitFor: ['build']
 
-  # Push latest tag
+  # Push latest
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-analysis-api-service:latest']
+    args: ['push', 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-analysis-api-service-vpc-test:latest']
     id: 'push-latest'
     waitFor: ['build']
 
   # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     args: [
-      'gcloud', 'run', 'deploy', 'text-analysis-api-service',
-      '--image=asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-analysis-api-service:$COMMIT_SHA',
+      'gcloud', 'run', 'deploy', 'text-analysis-api-service-vpc-test',
+      '--image=asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-analysis-api-service-vpc-test:$COMMIT_SHA',
       '--region=asia-southeast2',
       '--platform=managed',
       '--allow-unauthenticated',
-      '--set-env-vars=GOOGLE_CLOUD_PROJECT=$PROJECT_ID,PUBSUB_TOPIC=text-analysis-request,FIRESTORE_DATABASE=text-analysis-firestore,REQUIRE_AUTH=false'
+      '--set-env-vars=GOOGLE_CLOUD_PROJECT=$PROJECT_ID,PUBSUB_TOPIC=text-analysis-request-vpc-test,FIRESTORE_DATABASE=text-analysis-firestore-vpc-test,REQUIRE_AUTH=false'
     ]
     id: 'deploy'
     waitFor: ['push']
 
 images:
-  - 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-analysis-api-service:$COMMIT_SHA'
-  - 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-analysis-api-service:latest'
+  - 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-analysis-api-service-vpc-test:$COMMIT_SHA'
+  - 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-analysis-api-service-vpc-test:latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY
