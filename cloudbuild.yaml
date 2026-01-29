@@ -22,7 +22,7 @@ steps:
     id: 'push-latest'
     waitFor: ['build']
 
-  # Deploy to Cloud Run
+  # Deploy to Cloud Run with VPC Connector
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     args: [
       'gcloud', 'run', 'deploy', 'text-analysis-api-service-vpc-test',
@@ -30,6 +30,8 @@ steps:
       '--region=asia-southeast2',
       '--platform=managed',
       '--allow-unauthenticated',
+      '--vpc-connector=text-analysis-connector',
+      '--vpc-egress=all-traffic',
       '--set-env-vars=GOOGLE_CLOUD_PROJECT=$PROJECT_ID,PUBSUB_TOPIC=text-analysis-request-vpc-test,FIRESTORE_DATABASE=text-analysis-firestore-vpc-test,REQUIRE_AUTH=false'
     ]
     id: 'deploy'
