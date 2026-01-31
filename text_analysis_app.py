@@ -227,11 +227,19 @@ app.add_middleware(
 publisher = None
 firestore_client = None
 
-# Configuration constants
+# Configuration constants - all values from Secret Manager (no hardcoded defaults)
 class ServiceConfig:
-    PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "bni-prod-dma-bnimove-ai")
-    PUBSUB_TOPIC = os.getenv("PUBSUB_TOPIC", "text-analysis-request")
-    FIRESTORE_DATABASE = os.getenv("FIRESTORE_DATABASE", "text-analysis-firestore")
+    PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
+    if not PROJECT_ID:
+        raise ValueError("GOOGLE_CLOUD_PROJECT environment variable is required")
+    
+    PUBSUB_TOPIC = os.getenv("PUBSUB_TOPIC")
+    if not PUBSUB_TOPIC:
+        raise ValueError("PUBSUB_TOPIC environment variable is required")
+    
+    FIRESTORE_DATABASE = os.getenv("FIRESTORE_DATABASE")
+    if not FIRESTORE_DATABASE:
+        raise ValueError("FIRESTORE_DATABASE environment variable is required")
 
 # Environment variables
 PROJECT_ID = ServiceConfig.PROJECT_ID

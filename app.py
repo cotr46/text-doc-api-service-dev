@@ -29,6 +29,9 @@ from auth import rate_limiter, AuthConfig, AuditLogger, get_client_id, get_reque
 from text_analysis_metrics import text_analysis_metrics
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
+# Model Armor import for AI security
+from model_armor_client import get_model_armor_client, sanitize_user_prompt
+
 # Initialize security
 security = HTTPBearer(auto_error=False)
 
@@ -253,12 +256,22 @@ publisher = None
 firestore_client = None
 bucket = None
 
-# Configuration constants - matching Google Cloud Run settings
+# Configuration constants - all values from Secret Manager (no hardcoded defaults)
 class ServiceConfig:
-    PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "bni-prod-dma-bnimove-ai")
+    PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
+    if not PROJECT_ID:
+        raise ValueError("GOOGLE_CLOUD_PROJECT environment variable is required")
+    
     BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "sbp-wrapper-bucket")
-    PUBSUB_TOPIC = os.getenv("PUBSUB_TOPIC", "document-processing-request")
-    FIRESTORE_DATABASE = os.getenv("FIRESTORE_DATABASE", "document-processing-firestore")
+    
+    PUBSUB_TOPIC = os.getenv("PUBSUB_TOPIC")
+    if not PUBSUB_TOPIC:
+        raise ValueError("PUBSUB_TOPIC environment variable is required")
+    
+    FIRESTORE_DATABASE = os.getenv("FIRESTORE_DATABASE")
+    if not FIRESTORE_DATABASE:
+        raise ValueError("FIRESTORE_DATABASE environment variable is required")
+    
     MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "100"))
     MAX_FILES_PER_UPLOAD = int(os.getenv("MAX_FILES_PER_UPLOAD", "10"))
     SUPPORTED_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png']
@@ -1456,6 +1469,37 @@ async def submit_text_analysis(
         
         # Use sanitized name for processing
         sanitized_name = validation_result["sanitized_name"]
+        
+        # Model Armor: Check for prompt injection, jailbreak, etc.
+        armor_result = await sanitize_user_prompt(sanitized_name)
+        if armor_result.blocked:
+            security_metrics.record_validation(False, SecurityViolationType.INJECTION_ATTEMPT)
+            text_analysis_metrics.record_request_failure(
+                metrics_start_time, 
+                analysis_type.value, 
+                request.entity_type.value, 
+                model_name, 
+                "model_armor_blocked"
+            )
+            
+            block_reasons = []
+            if armor_result.prompt_injection_detected:
+                block_reasons.append("prompt_injection")
+            if armor_result.jailbreak_detected:
+                block_reasons.append("jailbreak_attempt")
+            if armor_result.malicious_uri_detected:
+                block_reasons.append("malicious_uri")
+            
+            print(f"🛡️ Model Armor blocked request: {block_reasons}")
+            
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "Request blocked by security filter",
+                    "reasons": block_reasons,
+                    "message": "Input contains potentially harmful content"
+                }
+            )
         
         # Validate request parameters and check model availability
         fallback_analysis_type = await validate_text_analysis_request(analysis_type, request.entity_type, sanitized_name)
